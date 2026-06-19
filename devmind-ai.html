@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DevMind AI — Multi-Agent Developer Copilot</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #111118;
+    --bg3: #1a1a24;
+    --bg4: #22222f;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #f0f0f8;
+    --text2: #9898b8;
+    --text3: #5a5a7a;
+    --purple: #7c6fcd;
+    --purple2: #9d92e0;
+    --purple-bg: rgba(124,111,205,0.12);
+    --purple-border: rgba(124,111,205,0.3);
+    --green: #22c55e;
+    --green-bg: rgba(34,197,94,0.1);
+    --amber: #f59e0b;
+    --amber-bg: rgba(245,158,11,0.1);
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,0.1);
+    --cyan: #22d3ee;
+    --cyan-bg: rgba(34,211,238,0.1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; background: var(--bg); color: var(--text); overflow: hidden; }
+  
+  /* Layout */
+  #app { display: flex; height: 100vh; }
+  #sidebar { width: 220px; min-width: 220px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Sidebar */
+  .logo { padding: 18px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #7c6fcd, #22d3ee); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; letter-spacing: -1px; }
+  .logo-text { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.5px; }
+  .logo-badge { margin-left: auto; font-size: 9px; padding: 2px 6px; background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,197,94,0.2); border-radius: 4px; font-weight: 600; }
+
+  .nav-section { padding: 14px 12px 4px; font-size: 9px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 1.2px; }
+  .nav-item { display: flex; align-items: center; gap: 9px; padding: 8px 12px; margin: 1px 6px; border-radius: 7px; cursor: pointer; font-size: 12.5px; color: var(--text2); transition: all 0.15s; border: 1px solid transparent; }
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active { background: var(--purple-bg); color: var(--purple2); border-color: var(--purple-border); }
+  .nav-item .icon { font-size: 14px; width: 16px; text-align: center; }
+  .nav-item .badge { margin-left: auto; font-size: 10px; padding: 1px 6px; background: var(--purple-bg); color: var(--purple2); border-radius: 10px; font-weight: 600; }
+
+  .agent-status-bar { margin-top: auto; padding: 12px 14px; border-top: 1px solid var(--border); }
+  .status-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text2); margin-bottom: 6px; }
+  .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; flex-shrink: 0; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(0.85)} }
+  .model-info { font-size: 10px; color: var(--text3); margin-top: 2px; }
+
+  /* Topbar */
+  #topbar { height: 50px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 18px; gap: 12px; background: var(--bg2); }
+  .topbar-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .topbar-meta { font-size: 11px; color: var(--text3); padding: 3px 8px; background: var(--bg3); border-radius: 5px; border: 1px solid var(--border); }
+  .topbar-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .btn-primary { background: var(--purple); color: #fff; border: none; border-radius: 7px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: inherit; font-weight: 600; transition: all 0.15s; display: flex; align-items: center; gap: 6px; }
+  .btn-primary:hover { background: var(--purple2); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border2); border-radius: 7px; padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .btn-ghost:hover { background: var(--bg3); color: var(--text); }
+
+  /* Panels */
+  #content { flex: 1; overflow: hidden; }
+  .panel { display: none; height: 100%; }
+  .panel.active { display: flex; }
+
+  /* ── CHAT PANEL ── */
+  #panel-chat { flex-direction: row; }
+  .chat-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 2px; }
+
+  .msg { display: flex; gap: 12px; align-items: flex-start; animation: fadeIn 0.2s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+  .msg-avatar { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+  .msg-body { flex: 1; min-width: 0; }
+  .msg-header { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .msg-role { font-size: 11px; font-weight: 600; }
+  .msg-time { font-size: 10px; color: var(--text3); }
+  .msg-model { font-size: 10px; padding: 1px 6px; border-radius: 4px; }
+  .msg-text { font-size: 13px; line-height: 1.65; color: var(--text); }
+  .msg-text p { margin-bottom: 6px; }
+  .msg-text code { background: var(--bg3); padding: 1px 6px; border-radius: 4px; font-size: 12px; border: 1px solid var(--border); color: var(--cyan); }
+  .msg-text pre { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 8px 0; font-size: 12px; overflow-x: auto; line-height: 1.6; color: var(--text); }
+  .msg-text pre .comment { color: var(--text3); }
+  .msg-text pre .keyword { color: var(--purple2); }
+  .msg-text pre .string { color: var(--green); }
+  .msg-text pre .type { color: var(--cyan); }
+
+  .tool-call { background: var(--bg3); border: 1px solid var(--border); border-left: 3px solid var(--purple); border-radius: 7px; padding: 10px 12px; margin: 8px 0; font-size: 12px; }
+  .tc-header { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+  .tc-label { font-size: 10px; font-weight: 600; color: var(--purple2); text-transform: uppercase; letter-spacing: 0.6px; }
+  .tc-name { font-size: 12px; font-weight: 600; color: var(--text); }
+  .tc-body { color: var(--text2); line-height: 1.5; font-size: 11.5px; }
+  .tc-body code { font-size: 11px; }
+
+  .spinner { width: 14px; height: 14px; border: 2px solid var(--border2); border-top-color: var(--purple2); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .chat-input-wrap { padding: 14px 20px; border-top: 1px solid var(--border); background: var(--bg2); }
+  .agent-toggles { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+  .agent-toggle { padding: 4px 10px; border-radius: 6px; font-size: 11px; border: 1px solid var(--border2); cursor: pointer; color: var(--text2); background: transparent; font-family: inherit; transition: all 0.15s; }
+  .agent-toggle:hover { border-color: var(--border2); background: var(--bg3); }
+  .agent-toggle.on { background: var(--purple-bg); border-color: var(--purple-border); color: var(--purple2); font-weight: 600; }
+  .toggle-label { font-size: 11px; color: var(--text3); white-space: nowrap; }
+  .input-row { display: flex; gap: 10px; align-items: flex-end; }
+  .chat-textarea { flex: 1; background: var(--bg3); border: 1px solid var(--border2); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--text); font-family: inherit; resize: none; min-height: 44px; max-height: 140px; line-height: 1.5; transition: border-color 0.15s; }
+  .chat-textarea:focus { outline: none; border-color: var(--purple); }
+  .chat-textarea::placeholder { color: var(--text3); }
+  .send-btn { width: 44px; height: 44px; border-radius: 10px; border: none; background: var(--purple); color: #fff; cursor: pointer; font-size: 18px; transition: all 0.15s; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .send-btn:hover { background: var(--purple2); }
+  .send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* Chat sidebar */
+  .chat-side { width: 220px; min-width: 220px; border-left: 1px solid var(--border); background: var(--bg2); padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+  .cs-section-title { font-size: 9px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 8px; }
+  .mini-agent { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; margin-bottom: 6px; }
+  .ma-top { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+  .ma-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .ma-name { font-size: 12px; font-weight: 600; color: var(--text); }
+  .ma-desc { font-size: 10.5px; color: var(--text2); line-height: 1.4; }
+  .ma-stat { font-size: 10px; margin-top: 5px; display: flex; gap: 6px; }
+  .stat-pill { padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+
+  /* ── AGENTS PANEL ── */
+  #panel-agents { flex-direction: column; overflow-y: auto; padding: 20px; gap: 16px; background: var(--bg); }
+  #panel-agents.active { display: flex; }
+  .agents-header { display: flex; align-items: center; justify-content: space-between; }
+  .agents-header h2 { font-size: 16px; font-weight: 600; color: var(--text); }
+  .agents-header p { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .agent-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; cursor: pointer; transition: all 0.2s; }
+  .agent-card:hover { border-color: var(--purple-border); background: var(--bg3); transform: translateY(-2px); }
+  .agent-card.active-card { border-color: var(--purple); background: var(--purple-bg); }
+  .ac-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 12px; }
+  .ac-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .ac-desc { font-size: 11.5px; color: var(--text2); line-height: 1.5; margin-bottom: 10px; }
+  .ac-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+  .ac-tag { font-size: 10px; padding: 2px 7px; border-radius: 5px; background: var(--bg4); color: var(--text2); border: 1px solid var(--border); }
+  .ac-status { display: flex; align-items: center; gap: 5px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text2); }
+
+  /* ── PIPELINE PANEL ── */
+  #panel-pipeline { flex-direction: row; overflow: hidden; }
+  #panel-pipeline.active { display: flex; }
+  .pipeline-canvas { flex: 1; padding: 20px; overflow-y: auto; }
+  .pipeline-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .pipeline-meta { font-size: 12px; color: var(--text2); margin-bottom: 20px; }
+  .pipe-step { display: flex; align-items: stretch; gap: 0; margin-bottom: 0; }
+  .pipe-line { display: flex; flex-direction: column; align-items: center; width: 36px; flex-shrink: 0; }
+  .pipe-num { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; z-index: 1; }
+  .pipe-connector { flex: 1; width: 2px; background: var(--border2); min-height: 24px; margin: 2px 0; }
+  .pipe-body { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin: 0 0 10px 0; transition: all 0.2s; }
+  .pipe-body.running { border-color: var(--purple-border); background: var(--purple-bg); }
+  .pipe-body.done { border-color: rgba(34,197,94,0.3); background: var(--green-bg); }
+  .pipe-body.waiting { opacity: 0.45; }
+  .pb-top { display: flex; align-items: center; gap: 10px; }
+  .pb-title { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+  .pb-model { font-size: 11px; color: var(--text3); }
+  .pb-status { font-size: 11px; padding: 2px 8px; border-radius: 5px; font-weight: 600; white-space: nowrap; }
+  .pb-output { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text2); line-height: 1.5; display: none; }
+  .pb-output.visible { display: block; }
+
+  .pipeline-side { width: 240px; border-left: 1px solid var(--border); background: var(--bg2); padding: 16px; overflow-y: auto; }
+  .ps-title { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 14px; }
+  .ps-row { margin-bottom: 12px; }
+  .ps-label { font-size: 11px; color: var(--text3); margin-bottom: 3px; }
+  .ps-value { font-size: 12.5px; color: var(--text); font-weight: 500; }
+  .run-pipeline-btn { width: 100%; background: var(--purple); color: #fff; border: none; border-radius: 8px; padding: 9px; font-size: 12.5px; cursor: pointer; font-family: inherit; font-weight: 600; margin-bottom: 10px; transition: all 0.15s; }
+  .run-pipeline-btn:hover:not(:disabled) { background: var(--purple2); }
+  .run-pipeline-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── SEARCH PANEL ── */
+  #panel-search { flex-direction: column; overflow: hidden; }
+  #panel-search.active { display: flex; }
+  .search-header { padding: 18px 20px 14px; border-bottom: 1px solid var(--border); background: var(--bg2); }
+  .search-bar { display: flex; gap: 10px; margin-bottom: 12px; }
+  .search-input { flex: 1; background: var(--bg3); border: 1px solid var(--border2); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--text); font-family: inherit; transition: border-color 0.15s; }
+  .search-input:focus { outline: none; border-color: var(--purple); }
+  .search-input::placeholder { color: var(--text3); }
+  .search-go { padding: 10px 18px; border-radius: 10px; border: none; background: var(--purple); color: #fff; font-size: 13px; cursor: pointer; font-family: inherit; font-weight: 600; transition: all 0.15s; white-space: nowrap; }
+  .search-go:hover:not(:disabled) { background: var(--purple2); }
+  .search-go:disabled { opacity: 0.4; cursor: not-allowed; }
+  .filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { padding: 4px 11px; border-radius: 20px; font-size: 11px; border: 1px solid var(--border2); cursor: pointer; color: var(--text2); background: transparent; font-family: inherit; transition: all 0.15s; }
+  .chip:hover { border-color: var(--border2); background: var(--bg3); }
+  .chip.on { background: var(--purple-bg); border-color: var(--purple-border); color: var(--purple2); font-weight: 600; }
+  .search-results { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .result-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 13px 16px; cursor: pointer; transition: all 0.15s; }
+  .result-card:hover { border-color: var(--border2); background: var(--bg3); }
+  .rc-path { font-size: 10.5px; color: var(--text3); margin-bottom: 4px; font-family: inherit; }
+  .rc-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 5px; }
+  .rc-snippet { font-size: 11.5px; color: var(--text2); line-height: 1.6; font-family: inherit; white-space: pre-wrap; }
+  .rc-snippet em { background: var(--purple-bg); color: var(--purple2); font-style: normal; border-radius: 3px; padding: 0 3px; }
+  .rc-meta { display: flex; gap: 7px; margin-top: 8px; align-items: center; }
+  .rc-tag { font-size: 10px; padding: 2px 7px; border-radius: 4px; background: var(--bg4); color: var(--text2); border: 1px solid var(--border); }
+  .rc-score { margin-left: auto; font-size: 11px; color: var(--purple2); font-weight: 700; }
+  .rc-action { font-size: 11px; color: var(--text3); padding: 2px 8px; border: 1px solid var(--border); border-radius: 5px; cursor: pointer; background: transparent; font-family: inherit; transition: all 0.15s; }
+  .rc-action:hover { background: var(--bg4); color: var(--text); }
+
+  /* Empty / Loading states */
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 10px; color: var(--text3); font-size: 13px; }
+  .empty-icon { font-size: 32px; margin-bottom: 4px; }
+  .loading-state { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px; color: var(--text2); font-size: 12px; }
+
+  /* Toast */
+  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px; padding: 10px 16px; font-size: 12.5px; color: var(--text); transform: translateY(60px); opacity: 0; transition: all 0.3s; z-index: 1000; max-width: 320px; }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.error { border-color: rgba(239,68,68,0.4); background: var(--red-bg); color: #fca5a5; }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 2px; }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    #sidebar { width: 180px; min-width: 180px; }
+    .chat-side { display: none; }
+    .pipeline-side { width: 200px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="logo">
+      <div class="logo-icon">DM</div>
+      <div class="logo-text">DevMind</div>
+      <div class="logo-badge">LIVE</div>
+    </div>
+
+    <div class="nav-section">Workspace</div>
+    <div class="nav-item active" onclick="showPanel('chat', this)">
+      <span class="icon">💬</span> Copilot Chat
+    </div>
+    <div class="nav-item" onclick="showPanel('agents', this)">
+      <span class="icon">🤖</span> Agents <span class="badge">6</span>
+    </div>
+    <div class="nav-item" onclick="showPanel('pipeline', this)">
+      <span class="icon">⚡</span> Pipelines
+    </div>
+    <div class="nav-item" onclick="showPanel('search', this)">
+      <span class="icon">🔍</span> Code Search
+    </div>
+
+    <div class="nav-section">Suggested</div>
+    <div class="nav-item" style="font-size:12px" onclick="quickPrompt('Review this code for security vulnerabilities and suggest fixes')">
+      <span class="icon" style="font-size:12px">🔐</span> Security audit
+    </div>
+    <div class="nav-item" style="font-size:12px" onclick="quickPrompt('Write comprehensive unit tests for a REST API authentication module')">
+      <span class="icon" style="font-size:12px">🧪</span> Generate tests
+    </div>
+    <div class="nav-item" style="font-size:12px" onclick="quickPrompt('Explain this code and generate JSDoc documentation for it')">
+      <span class="icon" style="font-size:12px">📄</span> Write docs
+    </div>
+    <div class="nav-item" style="font-size:12px" onclick="quickPrompt('Analyze and optimize this database query for better performance')">
+      <span class="icon" style="font-size:12px">⚡</span> Optimize query
+    </div>
+
+    <div class="agent-status-bar">
+      <div class="status-row"><div class="pulse"></div> 4 agents ready</div>
+      <div class="model-info">claude-sonnet-4-6 · live API</div>
+    </div>
+  </div>
+
+  <!-- MAIN AREA -->
+  <div id="main">
+    <!-- Topbar -->
+    <div id="topbar">
+      <div id="topbar-title" class="topbar-title">Copilot Chat</div>
+      <div id="topbar-meta" class="topbar-meta">claude-sonnet-4-6 · multi-agent</div>
+      <div class="topbar-right">
+        <button class="btn-ghost" onclick="clearChat()" id="clear-btn">Clear</button>
+        <button class="btn-primary" id="action-btn" onclick="handleAction()">▶ Run</button>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div id="content">
+
+      <!-- ── CHAT PANEL ── -->
+      <div class="panel active" id="panel-chat">
+        <div class="chat-col">
+          <div class="messages" id="messages">
+            <!-- Welcome -->
+            <div class="msg">
+              <div class="msg-avatar" style="background:linear-gradient(135deg,#7c6fcd,#22d3ee);color:#fff">DM</div>
+              <div class="msg-body">
+                <div class="msg-header">
+                  <span class="msg-role" style="color:#9d92e0">DevMind</span>
+                  <span class="msg-model" style="background:var(--purple-bg);color:var(--purple2);padding:1px 6px;border-radius:4px">claude-sonnet-4-6</span>
+                  <span class="msg-time" id="welcome-time"></span>
+                </div>
+                <div class="msg-text">
+                  <p>Ready. I'm your multi-agent AI copilot powered by Claude.</p>
+                  <p>I can help you <code>write & refactor code</code>, <code>scan for security issues</code>, <code>generate tests</code>, <code>write docs</code>, and <code>optimize performance</code> — all in parallel using specialized agents.</p>
+                  <p>Select which agents to involve above the input box, then ask anything about your code.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Input area -->
+          <div class="chat-input-wrap">
+            <div class="agent-toggles">
+              <span class="toggle-label">Agents:</span>
+              <button class="agent-toggle on" data-agent="CodeAgent">⚙️ CodeAgent</button>
+              <button class="agent-toggle" data-agent="SecurityAgent">🔐 SecurityAgent</button>
+              <button class="agent-toggle" data-agent="TestAgent">🧪 TestAgent</button>
+              <button class="agent-toggle" data-agent="DocsAgent">📄 DocsAgent</button>
+              <button class="agent-toggle" data-agent="PerfAgent">⚡ PerfAgent</button>
+            </div>
+            <div class="input-row">
+              <textarea
+                class="chat-textarea"
+                id="chat-input"
+                placeholder="Ask about your code, paste a snippet, describe a problem..."
+                rows="1"
+                onkeydown="handleKey(event)"
+                oninput="autoResize(this)"
+              ></textarea>
+              <button class="send-btn" id="send-btn" onclick="sendMessage()" title="Send (Enter)">➤</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat sidebar -->
+        <div class="chat-side">
+          <div>
+            <div class="cs-section-title">Active Agents</div>
+            <div id="active-agents-list">
+              <div class="mini-agent">
+                <div class="ma-top"><div class="ma-dot" style="background:var(--purple2)"></div><div class="ma-name">CodeAgent</div></div>
+                <div class="ma-desc">Read, write, refactor code</div>
+                <div class="ma-stat"><span class="stat-pill" style="background:var(--purple-bg);color:var(--purple2)">Ready</span></div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="cs-section-title">Context</div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <div style="font-size:11px;color:var(--text2);padding:6px 9px;background:var(--bg3);border-radius:6px;border:1px solid var(--border)">📁 Your codebase</div>
+              <div style="font-size:11px;color:var(--text2);padding:6px 9px;background:var(--bg3);border-radius:6px;border:1px solid var(--border)">💡 Best practices</div>
+              <div style="font-size:11px;color:var(--text2);padding:6px 9px;background:var(--bg3);border-radius:6px;border:1px solid var(--border)">📖 OWASP Top 10</div>
+            </div>
+          </div>
+          <div>
+            <div class="cs-section-title">Quick Prompts</div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <button class="btn-ghost" style="text-align:left;font-size:11px;padding:6px 9px" onclick="quickPrompt('Write a secure JWT authentication system in Node.js with refresh tokens')">JWT auth system</button>
+              <button class="btn-ghost" style="text-align:left;font-size:11px;padding:6px 9px" onclick="quickPrompt('Build a rate limiter middleware for Express.js with Redis')">Rate limiter</button>
+              <button class="btn-ghost" style="text-align:left;font-size:11px;padding:6px 9px" onclick="quickPrompt('Create a type-safe REST API client with error handling in TypeScript')">TS API client</button>
+              <button class="btn-ghost" style="text-align:left;font-size:11px;padding:6px 9px" onclick="quickPrompt('Explain time complexity and optimize this sorting algorithm')">Algorithm review</button>
+            </div>
+          </div>
+          <div id="token-info" style="display:none">
+            <div class="cs-section-title">Usage</div>
+            <div style="font-size:11px;color:var(--text2);display:flex;flex-direction:column;gap:4px" id="token-display"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── AGENTS PANEL ── -->
+      <div class="panel" id="panel-agents">
+        <div class="agents-header">
+          <div><div style="font-size:16px;font-weight:600;margin-bottom:3px">Agent Directory</div><div style="font-size:12px;color:var(--text2)">6 specialized agents — each with a dedicated system prompt and tool set</div></div>
+          <button class="btn-primary" onclick="showPanel('chat',document.querySelector('.nav-item'));document.querySelector('.nav-item').classList.add('active')">↗ Open Chat</button>
+        </div>
+        <div class="agent-grid" id="agent-grid"></div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12px;color:var(--text2);line-height:1.6">
+          <strong style="color:var(--text)">How agents work:</strong> Each agent has a specialized system prompt tuned for its domain. When you select multiple agents, DevMind calls them in parallel via the Anthropic API and synthesizes their responses into a unified answer. The <strong style="color:var(--purple2)">Orchestrator</strong> (claude-sonnet-4-6) coordinates routing and synthesis.
+        </div>
+      </div>
+
+      <!-- ── PIPELINE PANEL ── -->
+      <div class="panel" id="panel-pipeline">
+        <div class="pipeline-canvas">
+          <div class="pipeline-title">PR Review Pipeline</div>
+          <div class="pipeline-meta">Runs automatically on each PR · agents execute in parallel where possible</div>
+          <div id="pipeline-steps"></div>
+        </div>
+        <div class="pipeline-side">
+          <div class="ps-title">Pipeline Config</div>
+          <div class="ps-row"><div class="ps-label">Name</div><div class="ps-value">PR Review</div></div>
+          <div class="ps-row"><div class="ps-label">Trigger</div><div class="ps-value">pull_request</div></div>
+          <div class="ps-row"><div class="ps-label">Branches</div><div class="ps-value">main, develop</div></div>
+          <div class="ps-row"><div class="ps-label">Parallelism</div><div class="ps-value">Steps 2 + 3</div></div>
+          <div class="ps-row"><div class="ps-label">On fail</div><div class="ps-value">Block merge</div></div>
+          <div class="ps-row"><div class="ps-label">Timeout</div><div class="ps-value">5 min total</div></div>
+          <button class="run-pipeline-btn" id="pipeline-btn" onclick="runPipeline()">▶ Run Pipeline</button>
+          <div style="font-size:11px;color:var(--text3);line-height:1.6">Running the pipeline calls real Claude agents in sequence and streams their outputs into each step below.</div>
+        </div>
+      </div>
+
+      <!-- ── SEARCH PANEL ── -->
+      <div class="panel" id="panel-search">
+        <div class="search-header">
+          <div style="font-size:14px;font-weight:600;margin-bottom:10px">Semantic Code Search</div>
+          <div class="search-bar">
+            <input class="search-input" id="search-input" placeholder="e.g. find auth token expiry logic, how does rate limiting work..." />
+            <button class="search-go" id="search-go" onclick="doSearch()">Search</button>
+          </div>
+          <div class="filter-chips">
+            <span style="font-size:11px;color:var(--text3);line-height:2.2">Examples:</span>
+            <button class="chip" onclick="setSearch(this,'find where database connections are pooled')">DB connection pooling</button>
+            <button class="chip" onclick="setSearch(this,'how is user authentication handled')">Auth flow</button>
+            <button class="chip" onclick="setSearch(this,'find all API rate limiting code')">Rate limiting</button>
+            <button class="chip" onclick="setSearch(this,'show error handling patterns')">Error handling</button>
+            <button class="chip" onclick="setSearch(this,'how are environment variables validated')">Config validation</button>
+          </div>
+        </div>
+        <div class="search-results" id="search-results">
+          <div class="empty-state">
+            <div class="empty-icon">🔍</div>
+            <div>Enter a natural language query to search your codebase</div>
+            <div style="font-size:11px;color:var(--text3)">Powered by Claude — understands intent, not just keywords</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  DEVMIND AI — Core State & Config
+// ═══════════════════════════════════════════════════
+const API_URL = 'https://api.anthropic.com/v1/messages';
+const MODEL = 'claude-sonnet-4-6';
+let chatHistory = [];
+let isLoading = false;
+let currentPanel = 'chat';
+
+// Set welcome time
+document.getElementById('welcome-time').textContent = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+
+// ───── Agent Definitions ─────
+const AGENTS = [
+  {
+    id: 'CodeAgent',
+    name: 'CodeAgent',
+    icon: '⚙️',
+    color: '#7c6fcd',
+    bgColor: 'rgba(124,111,205,0.12)',
+    desc: 'Reads, writes, refactors, and explains code across your entire codebase with best practices.',
+    tags: ['TypeScript', 'Python', 'Go', 'Rust', 'Java'],
+    systemPrompt: `You are CodeAgent, a senior full-stack software engineer and code expert inside DevMind AI. You specialize in:
+- Writing clean, idiomatic, production-ready code in any language
+- Refactoring messy code into clean architecture
+- Explaining complex code clearly with examples
+- Following SOLID principles, design patterns, and best practices
+- Providing complete, runnable implementations
+
+When you write code, always use proper syntax highlighting markers like \`\`\`typescript or \`\`\`python. Include comments explaining key decisions. Be thorough and production-ready.`
+  },
+  {
+    id: 'SecurityAgent',
+    name: 'SecurityAgent',
+    icon: '🔐',
+    color: '#ef4444',
+    bgColor: 'rgba(239,68,68,0.1)',
+    desc: 'Scans for OWASP vulnerabilities, secrets in code, injection flaws, and misconfigurations.',
+    tags: ['OWASP Top 10', 'CVE', 'Secrets scan', 'Pen testing'],
+    systemPrompt: `You are SecurityAgent, an expert application security engineer inside DevMind AI. You specialize in:
+- OWASP Top 10 vulnerabilities (injection, XSS, CSRF, etc.)
+- Authentication and authorization flaws
+- Cryptography and token security
+- Secrets and credential exposure
+- Dependency vulnerabilities
+- Security best practices
+
+For every security issue found, rate it: CRITICAL / HIGH / MEDIUM / LOW. Explain the attack vector, impact, and provide a concrete fix with code.`
+  },
+  {
+    id: 'TestAgent',
+    name: 'TestAgent',
+    icon: '🧪',
+    color: '#22c55e',
+    bgColor: 'rgba(34,197,94,0.1)',
+    desc: 'Generates comprehensive unit, integration, and e2e tests with coverage analysis.',
+    tags: ['Jest', 'Vitest', 'Pytest', 'Go test', 'Mocha'],
+    systemPrompt: `You are TestAgent, a test engineering specialist inside DevMind AI. You specialize in:
+- Writing comprehensive unit tests with edge cases
+- Integration tests for APIs and databases
+- Test-driven development (TDD) approaches
+- Mocking, stubbing, and test doubles
+- Coverage analysis and gap identification
+- Testing frameworks: Jest, Vitest, Pytest, Go test, Mocha
+
+Write complete, runnable test suites. Cover happy paths, error cases, edge cases, and boundary conditions. Include setup/teardown when needed.`
+  },
+  {
+    id: 'DocsAgent',
+    name: 'DocsAgent',
+    icon: '📄',
+    color: '#22d3ee',
+    bgColor: 'rgba(34,211,238,0.1)',
+    desc: 'Writes inline JSDoc/docstrings, README files, and API reference from source code.',
+    tags: ['JSDoc', 'OpenAPI', 'Markdown', 'Swagger', 'README'],
+    systemPrompt: `You are DocsAgent, a technical documentation specialist inside DevMind AI. You specialize in:
+- Writing clear JSDoc / Python docstrings / Go doc comments
+- Creating README.md files with proper structure
+- Generating OpenAPI/Swagger specifications
+- Writing architecture decision records (ADRs)
+- Creating onboarding guides for developers
+- Explaining "why" not just "what"
+
+Write documentation that a new developer can follow. Be precise about types, parameters, return values, and exceptions. Include examples.`
+  },
+  {
+    id: 'PerfAgent',
+    name: 'PerfAgent',
+    icon: '⚡',
+    color: '#f59e0b',
+    bgColor: 'rgba(245,158,11,0.1)',
+    desc: 'Profiles and optimizes bottlenecks — DB queries, bundle size, algorithms, and memory.',
+    tags: ['SQL', 'Big O', 'Webpack', 'Profiling', 'Caching'],
+    systemPrompt: `You are PerfAgent, a performance engineering specialist inside DevMind AI. You specialize in:
+- Algorithm complexity analysis (time and space)
+- Database query optimization (indexes, query plans, N+1)
+- Bundle size and load time optimization
+- Caching strategies (Redis, CDN, in-memory)
+- Memory leak detection and prevention
+- Async/concurrency optimizations
+
+Always show before/after comparisons with Big O notation. Explain WHY the optimization works. Quantify expected improvements where possible.`
+  },
+  {
+    id: 'SearchAgent',
+    name: 'SearchAgent',
+    icon: '🔍',
+    color: '#a855f7',
+    bgColor: 'rgba(168,85,247,0.1)',
+    desc: 'Understands semantic queries about code structure, patterns, and architecture.',
+    tags: ['Semantic', 'Vector', 'AST', 'Symbol search'],
+    systemPrompt: `You are SearchAgent, a code intelligence specialist inside DevMind AI. You specialize in:
+- Understanding natural language queries about code
+- Identifying where patterns and implementations live in codebases
+- Explaining code architecture and module relationships
+- Finding relevant code sections based on intent
+- Code archaeology — understanding legacy systems
+
+When answering search queries, generate realistic and helpful code examples showing what the user would find. Provide file paths, function names, and context as if you have indexed a real codebase.`
+  }
+];
+
+// ───── Pipeline Steps ─────
+const PIPELINE_STEPS = [
+  { num: 1, title: 'Fetch PR diff', model: 'github.api', agent: null, description: 'Pull the diff, changed files, and PR metadata from GitHub.', canParallel: false },
+  { num: 2, title: 'Security scan', model: MODEL, agent: 'SecurityAgent', description: 'Scan all changed files for vulnerabilities, secrets, and security anti-patterns.', canParallel: true },
+  { num: 3, title: 'Generate tests', model: MODEL, agent: 'TestAgent', description: 'Generate missing tests for new functions and changed logic.', canParallel: true },
+  { num: 4, title: 'Synthesize review', model: MODEL, agent: null, description: 'Combine security findings and test suggestions into a structured PR review comment.', canParallel: false },
+  { num: 5, title: 'Post to GitHub', model: 'github.api', agent: null, description: 'Post the review comment to the pull request and block merge if critical issues found.', canParallel: false }
+];
+
+// ═══════════════════════════════════════════════════
+//  Panel Navigation
+// ═══════════════════════════════════════════════════
+const panelMeta = {
+  chat: { title: 'Copilot Chat', meta: `${MODEL} · multi-agent`, action: '▶ Run' },
+  agents: { title: 'Agent Directory', meta: '6 agents · always live', action: '↗ Chat' },
+  pipeline: { title: 'PR Review Pipeline', meta: 'multi-step orchestration', action: '▶ Run' },
+  search: { title: 'Semantic Code Search', meta: `powered by ${MODEL}`, action: '🔍 Search' }
+};
+
+function showPanel(id, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  if (el) el.classList.add('active');
+  currentPanel = id;
+  const m = panelMeta[id];
+  document.getElementById('topbar-title').textContent = m.title;
+  document.getElementById('topbar-meta').textContent = m.meta;
+  document.getElementById('action-btn').textContent = m.action;
+  document.getElementById('clear-btn').style.display = id === 'chat' ? '' : 'none';
+}
+
+function handleAction() {
+  if (currentPanel === 'chat') { document.getElementById('chat-input').focus(); }
+  else if (currentPanel === 'agents') { showPanel('chat', document.querySelector('.nav-item')); document.querySelector('.nav-item').classList.add('active'); }
+  else if (currentPanel === 'pipeline') { runPipeline(); }
+  else if (currentPanel === 'search') { doSearch(); }
+}
+
+// ═══════════════════════════════════════════════════
+//  Agent Toggles
+// ═══════════════════════════════════════════════════
+document.querySelectorAll('.agent-toggle').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.classList.toggle('on');
+    updateAgentSidebar();
+  });
+});
+
+function getActiveAgents() {
+  return [...document.querySelectorAll('.agent-toggle.on')].map(b => b.dataset.agent);
+}
+
+function updateAgentSidebar() {
+  const active = getActiveAgents();
+  const list = document.getElementById('active-agents-list');
+  if (!active.length) {
+    list.innerHTML = '<div style="font-size:11px;color:var(--text3)">No agents selected</div>';
+    return;
+  }
+  list.innerHTML = active.map(id => {
+    const a = AGENTS.find(x => x.id === id);
+    return `<div class="mini-agent">
+      <div class="ma-top"><div class="ma-dot" style="background:${a.color}"></div><div class="ma-name">${a.name}</div></div>
+      <div class="ma-desc">${a.desc.split('.')[0]}</div>
+      <div class="ma-stat"><span class="stat-pill" style="background:${a.bgColor};color:${a.color}">Ready</span></div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════
+//  Chat — Core Functions
+// ═══════════════════════════════════════════════════
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function clearChat() {
+  chatHistory = [];
+  const msgs = document.getElementById('messages');
+  msgs.innerHTML = `<div class="msg">
+    <div class="msg-avatar" style="background:linear-gradient(135deg,#7c6fcd,#22d3ee);color:#fff">DM</div>
+    <div class="msg-body">
+      <div class="msg-header"><span class="msg-role" style="color:#9d92e0">DevMind</span></div>
+      <div class="msg-text"><p>Chat cleared. What are we building?</p></div>
+    </div>
+  </div>`;
+  showToast('Chat cleared');
+}
+
+function quickPrompt(text) {
+  showPanel('chat', document.querySelector('.nav-item'));
+  document.querySelector('.nav-item').classList.add('active');
+  document.getElementById('chat-input').value = text;
+  autoResize(document.getElementById('chat-input'));
+  sendMessage();
+}
+
+function appendUserMsg(text) {
+  const msgs = document.getElementById('messages');
+  const time = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  const div = document.createElement('div');
+  div.className = 'msg';
+  div.innerHTML = `
+    <div class="msg-avatar" style="background:var(--bg4);color:var(--text2);font-size:12px">YOU</div>
+    <div class="msg-body">
+      <div class="msg-header">
+        <span class="msg-role" style="color:var(--text2)">You</span>
+        <span class="msg-time">${time}</span>
+      </div>
+      <div class="msg-text" style="white-space:pre-wrap">${escHtml(text)}</div>
+    </div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function appendAgentThinkingMsg(agents) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg';
+  div.id = 'thinking-msg';
+  const agentCalls = agents.map(id => {
+    const a = AGENTS.find(x => x.id === id);
+    return `<div class="tool-call">
+      <div class="tc-header">
+        <div class="spinner"></div>
+        <div class="tc-label">Routing to ${a.icon} ${a.name}</div>
+      </div>
+      <div class="tc-body">Analyzing your request with ${a.name}'s specialized context...</div>
+    </div>`;
+  }).join('');
+  div.innerHTML = `
+    <div class="msg-avatar" style="background:linear-gradient(135deg,#7c6fcd,#22d3ee);color:#fff">DM</div>
+    <div class="msg-body">
+      <div class="msg-header"><span class="msg-role" style="color:#9d92e0">DevMind · Orchestrating</span></div>
+      <div class="msg-text">${agentCalls}</div>
+    </div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function removeThinking() {
+  const el = document.getElementById('thinking-msg');
+  if (el) el.remove();
+}
+
+function appendAIMsg(content, agentIds, usage) {
+  const msgs = document.getElementById('messages');
+  const time = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  const div = document.createElement('div');
+  div.className = 'msg';
+  const agentLabels = agentIds.map(id => {
+    const a = AGENTS.find(x => x.id === id);
+    return `<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:${a.bgColor};color:${a.color};font-weight:600">${a.icon} ${a.name}</span>`;
+  }).join(' ');
+  div.innerHTML = `
+    <div class="msg-avatar" style="background:linear-gradient(135deg,#7c6fcd,#22d3ee);color:#fff">DM</div>
+    <div class="msg-body">
+      <div class="msg-header">
+        <span class="msg-role" style="color:#9d92e0">DevMind</span>
+        ${agentLabels}
+        <span class="msg-time">${time}</span>
+      </div>
+      <div class="msg-text">${formatMarkdown(content)}</div>
+    </div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  // Show token usage
+  if (usage) {
+    document.getElementById('token-info').style.display = 'block';
+    document.getElementById('token-display').innerHTML = `
+      <div style="display:flex;justify-content:space-between"><span>Input tokens</span><span style="color:var(--text)">${usage.input_tokens.toLocaleString()}</span></div>
+      <div style="display:flex;justify-content:space-between"><span>Output tokens</span><span style="color:var(--text)">${usage.output_tokens.toLocaleString()}</span></div>
+      <div style="display:flex;justify-content:space-between"><span>Total</span><span style="color:var(--purple2);font-weight:600">${(usage.input_tokens+usage.output_tokens).toLocaleString()}</span></div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  Claude API Call
+// ═══════════════════════════════════════════════════
+async function callClaude(systemPrompt, messages) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: messages
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error ${res.status}`);
+  }
+  return await res.json();
+}
+
+async function sendMessage() {
+  if (isLoading) return;
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const activeAgents = getActiveAgents();
+  if (!activeAgents.length) { showToast('Select at least one agent', true); return; }
+
+  input.value = '';
+  input.style.height = 'auto';
+  isLoading = true;
+  document.getElementById('send-btn').disabled = true;
+  document.getElementById('action-btn').disabled = true;
+
+  appendUserMsg(text);
+  appendAgentThinkingMsg(activeAgents);
+
+  // Build system prompt combining active agents
+  const agentSections = activeAgents.map(id => {
+    const a = AGENTS.find(x => x.id === id);
+    return `## ${a.icon} ${a.name}\n${a.systemPrompt}`;
+  }).join('\n\n---\n\n');
+
+  const orchestratorPrompt = `You are DevMind, an AI developer copilot that orchestrates multiple specialized agents. You are currently running these active agents:
+
+${agentSections}
+
+---
+
+## Orchestration Instructions
+- Respond as if all active agents have analyzed the request in parallel
+- Clearly label each agent's contribution with a header like "### ⚙️ CodeAgent" or "### 🔐 SecurityAgent"
+- Synthesize their outputs into a cohesive, actionable response
+- Use markdown code blocks with language tags (\`\`\`typescript, \`\`\`python, etc.)
+- Be thorough and production-ready
+- If only one agent is active, respond fully in that agent's voice without the header labels`;
+
+  // Add to history
+  chatHistory.push({ role: 'user', content: text });
+
+  try {
+    const data = await callClaude(orchestratorPrompt, chatHistory);
+    const reply = data.content.map(c => c.text || '').join('');
+    chatHistory.push({ role: 'assistant', content: reply });
+    removeThinking();
+    appendAIMsg(reply, activeAgents, data.usage);
+  } catch (err) {
+    removeThinking();
+    appendAIMsg(`⚠️ **API Error:** ${err.message}\n\nMake sure the API key is configured correctly. This app calls the Anthropic API directly.`, activeAgents, null);
+    showToast('API error: ' + err.message, true);
+  }
+
+  isLoading = false;
+  document.getElementById('send-btn').disabled = false;
+  document.getElementById('action-btn').disabled = false;
+}
+
+// ═══════════════════════════════════════════════════
+//  Agents Panel — Render
+// ═══════════════════════════════════════════════════
+function renderAgents() {
+  const grid = document.getElementById('agent-grid');
+  grid.innerHTML = AGENTS.map(a => `
+    <div class="agent-card" onclick="activateAgent('${a.id}')">
+      <div class="ac-icon" style="background:${a.bgColor}">${a.icon}</div>
+      <div class="ac-name">${a.name}</div>
+      <div class="ac-desc">${a.desc}</div>
+      <div class="ac-tags">${a.tags.map(t => `<span class="ac-tag">${t}</span>`).join('')}</div>
+      <div class="ac-status">
+        <div class="ma-dot" style="background:${a.color};width:7px;height:7px;border-radius:50%"></div>
+        <span style="font-size:11px;color:var(--text2)">Ready · ${MODEL}</span>
+        <span style="margin-left:auto;font-size:11px;padding:2px 7px;border-radius:4px;background:${a.bgColor};color:${a.color};font-weight:600">Activate ↗</span>
+      </div>
+    </div>`).join('');
+}
+
+function activateAgent(id) {
+  // Toggle on the agent toggle
+  const toggle = document.querySelector(`.agent-toggle[data-agent="${id}"]`);
+  if (toggle && !toggle.classList.contains('on')) toggle.classList.add('on');
+  updateAgentSidebar();
+  showPanel('chat', document.querySelector('.nav-item'));
+  document.querySelector('.nav-item').classList.add('active');
+  showToast(`${id} activated`);
+}
+
+// ═══════════════════════════════════════════════════
+//  Pipeline Panel
+// ═══════════════════════════════════════════════════
+let pipelineRunning = false;
+
+function renderPipeline(states) {
+  states = states || {};
+  const container = document.getElementById('pipeline-steps');
+  container.innerHTML = PIPELINE_STEPS.map((step, i) => {
+    const state = states[step.num] || 'waiting';
+    const isLast = i === PIPELINE_STEPS.length - 1;
+    let statusHtml = '';
+    if (state === 'done') statusHtml = `<span class="pb-status" style="background:var(--green-bg);color:var(--green)">✓ Done</span>`;
+    else if (state === 'running') statusHtml = `<span class="pb-status" style="background:var(--purple-bg);color:var(--purple2)"><span class="spinner" style="display:inline-block;width:10px;height:10px;margin-right:4px;vertical-align:middle"></span>Running</span>`;
+    else statusHtml = `<span class="pb-status" style="background:var(--bg4);color:var(--text3)">Waiting</span>`;
+
+    const bodyClass = state === 'done' ? 'done' : state === 'running' ? 'running' : 'waiting';
+    const output = states[step.num + '_output'] || '';
+
+    return `<div style="display:flex;gap:0;align-items:stretch">
+      <div class="pipe-line">
+        <div class="pipe-num" style="background:${state==='done'?'var(--green-bg)':state==='running'?'var(--purple-bg)':'var(--bg4)'};color:${state==='done'?'var(--green)':state==='running'?'var(--purple2)':'var(--text3)'}">${step.num}</div>
+        ${!isLast ? '<div class="pipe-connector"></div>' : ''}
+      </div>
+      <div style="flex:1;margin-bottom:${isLast?'0':'10px'};margin-left:10px">
+        <div class="pipe-body ${bodyClass}">
+          <div class="pb-top">
+            <div class="pb-title">${step.title}${step.canParallel?'<span style="margin-left:6px;font-size:9px;padding:1px 5px;background:var(--cyan-bg);color:var(--cyan);border-radius:3px;font-weight:600">PARALLEL</span>':''}</div>
+            <div class="pb-model" style="font-size:10px">${step.agent ? `${AGENTS.find(a=>a.id===step.agent)?.icon} ${step.agent}` : step.model}</div>
+            ${statusHtml}
+          </div>
+          <div style="font-size:11.5px;color:var(--text3);margin-top:5px">${step.description}</div>
+          ${output ? `<div class="pb-output visible">${output}</div>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function runPipeline() {
+  if (pipelineRunning) return;
+  pipelineRunning = true;
+  const btn = document.getElementById('pipeline-btn');
+  btn.disabled = true;
+  btn.textContent = '⟳ Running...';
+
+  const states = {};
+
+  // Step 1 — instant (simulated)
+  states[1] = 'running'; renderPipeline(states); await sleep(600);
+  states[1] = 'done'; states[1+'_output'] = '<code style="color:var(--cyan)">+47 lines / -12 lines across 4 files in auth/, middleware/</code>';
+  renderPipeline(states);
+
+  // Steps 2+3 — parallel real API calls
+  states[2] = 'running'; states[3] = 'running'; renderPipeline(states);
+
+  const sampleDiff = `diff --git a/auth/session.ts b/auth/session.ts
++  localStorage.setItem('token', accessToken)
++  if (token.exp > Date.now()) return token
++  const secret = 'hardcoded-secret-123'`;
+
+  const [secResult, testResult] = await Promise.allSettled([
+    callClaude(AGENTS.find(a=>a.id==='SecurityAgent').systemPrompt,
+      [{role:'user',content:`Review this PR diff for security issues:\n\n${sampleDiff}\n\nProvide a brief security analysis (2-3 issues max, be concise).`}]),
+    callClaude(AGENTS.find(a=>a.id==='TestAgent').systemPrompt,
+      [{role:'user',content:`For this PR diff, suggest 2-3 key tests that should be written:\n\n${sampleDiff}\n\nBe concise.`}])
+  ]);
+
+  states[2] = 'done';
+  states[2+'_output'] = secResult.status==='fulfilled'
+    ? formatMarkdown(secResult.value.content[0].text.slice(0,400)+'...')
+    : `<span style="color:var(--red)">Error: ${secResult.reason?.message}</span>`;
+
+  states[3] = 'done';
+  states[3+'_output'] = testResult.status==='fulfilled'
+    ? formatMarkdown(testResult.value.content[0].text.slice(0,400)+'...')
+    : `<span style="color:var(--red)">Error: ${testResult.reason?.message}</span>`;
+
+  renderPipeline(states); await sleep(400);
+
+  // Step 4 — synthesize
+  states[4] = 'running'; renderPipeline(states);
+  try {
+    const secText = secResult.status==='fulfilled' ? secResult.value.content[0].text : 'No security data';
+    const testText = testResult.status==='fulfilled' ? testResult.value.content[0].text : 'No test data';
+    const synthesis = await callClaude(
+      'You are a PR review synthesizer. Combine security findings and test suggestions into a brief, structured PR review comment (3-4 sentences max).',
+      [{role:'user',content:`Security findings:\n${secText}\n\nTest suggestions:\n${testText}\n\nWrite a concise PR review comment.`}]
+    );
+    states[4+'_output'] = formatMarkdown(synthesis.content[0].text);
+  } catch(e) {
+    states[4+'_output'] = `<span style="color:var(--red)">Synthesis error: ${e.message}</span>`;
+  }
+  states[4] = 'done'; renderPipeline(states); await sleep(400);
+
+  // Step 5 — instant (simulated)
+  states[5] = 'running'; renderPipeline(states); await sleep(700);
+  states[5] = 'done'; states[5+'_output'] = '<span style="color:var(--green)">✓ Review posted to PR #42 · 2 issues flagged · merge blocked</span>';
+  renderPipeline(states);
+
+  btn.disabled = false;
+  btn.textContent = '▶ Run Again';
+  pipelineRunning = false;
+  showToast('Pipeline complete — 2 security issues found');
+}
+
+// ═══════════════════════════════════════════════════
+//  Code Search Panel
+// ═══════════════════════════════════════════════════
+async function doSearch() {
+  const input = document.getElementById('search-input');
+  const query = input.value.trim();
+  if (!query) return;
+
+  const results = document.getElementById('search-results');
+  const btn = document.getElementById('search-go');
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  results.innerHTML = `<div class="loading-state"><div class="spinner" style="width:24px;height:24px;border-width:3px"></div><div>Searching codebase semantically...</div></div>`;
+
+  const prompt = `You are SearchAgent doing a semantic search over a large Node.js/TypeScript codebase. The user searched: "${query}"
+
+Return exactly 4 realistic search results as JSON array. Each result:
+{
+  "path": "realistic/file/path.ts · line N",
+  "title": "descriptive function/class name",
+  "snippet": "2-3 lines of realistic TypeScript/JavaScript code with the relevant part",
+  "tags": ["TypeScript", "one more relevant tag"],
+  "score": 95
+}
+
+Make the code snippets realistic and directly relevant to "${query}". Vary the score from 99 down to 75. Return ONLY the JSON array, no other text.`;
+
+  try {
+    const data = await callClaude('You are a code search engine. Return only valid JSON arrays.', [{role:'user',content:prompt}]);
+    const text = data.content[0].text.replace(/```json|```/g,'').trim();
+    const items = JSON.parse(text);
+
+    results.innerHTML = `<div style="font-size:11px;color:var(--text3);margin-bottom:4px">${items.length} results · semantic match for "${escHtml(query)}"</div>` +
+      items.map(r => `
+        <div class="result-card">
+          <div class="rc-path">${escHtml(r.path)}</div>
+          <div class="rc-title">${escHtml(r.title)}</div>
+          <div class="rc-snippet">${highlightQuery(escHtml(r.snippet), query)}</div>
+          <div class="rc-meta">
+            ${(r.tags||[]).map(t=>`<span class="rc-tag">${escHtml(t)}</span>`).join('')}
+            <button class="rc-action" onclick="explainResult('${escHtml(r.title)}','${escHtml(r.path)}')">Explain ↗</button>
+            <span class="rc-score">${r.score}% match</span>
+          </div>
+        </div>`).join('');
+  } catch(e) {
+    results.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div>Search error: ${escHtml(e.message)}</div></div>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Search';
+}
+
+function explainResult(title, path) {
+  quickPrompt(`Explain how "${title}" works (found at ${path}) and show me the implementation pattern`);
+}
+
+function setSearch(btn, query) {
+  document.getElementById('search-input').value = query;
+  doSearch();
+}
+
+function highlightQuery(snippet, query) {
+  const words = query.toLowerCase().split(' ').filter(w => w.length > 3);
+  let result = snippet;
+  words.forEach(w => {
+    result = result.replace(new RegExp(w, 'gi'), m => `<em>${m}</em>`);
+  });
+  return result;
+}
+
+// ═══════════════════════════════════════════════════
+//  Markdown Formatter (lightweight)
+// ═══════════════════════════════════════════════════
+function formatMarkdown(text) {
+  // Code blocks
+  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) =>
+    `<pre><code class="language-${lang}">${escHtml(code.trim())}</code></pre>`);
+  // Inline code
+  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Bold
+  text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  // Italic
+  text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  // Headers
+  text = text.replace(/^### (.*$)/gm, '<h4 style="font-size:13px;font-weight:600;color:var(--text);margin:12px 0 4px">$1</h4>');
+  text = text.replace(/^## (.*$)/gm, '<h3 style="font-size:14px;font-weight:600;color:var(--text);margin:14px 0 5px">$1</h3>');
+  text = text.replace(/^# (.*$)/gm, '<h2 style="font-size:15px;font-weight:700;color:var(--text);margin:16px 0 6px">$1</h2>');
+  // Bullets
+  text = text.replace(/^[-*] (.*$)/gm, '<li style="margin:2px 0;padding-left:4px">$1</li>');
+  text = text.replace(/(<li[\s\S]*?<\/li>)/g, '<ul style="padding-left:18px;margin:6px 0">$1</ul>');
+  // Numbered lists
+  text = text.replace(/^\d+\. (.*$)/gm, '<li style="margin:2px 0;padding-left:4px">$1</li>');
+  // Paragraphs
+  text = text.split('\n\n').map(para => {
+    para = para.trim();
+    if (!para || para.startsWith('<')) return para;
+    return `<p style="margin:5px 0">${para.replace(/\n/g, '<br>')}</p>`;
+  }).join('\n');
+  return text;
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════════════════════════════════════════
+//  Toast
+// ═══════════════════════════════════════════════════
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show' + (isError ? ' error' : '');
+  setTimeout(() => { t.className = ''; }, 3000);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ═══════════════════════════════════════════════════
+//  Init
+// ═══════════════════════════════════════════════════
+renderAgents();
+renderPipeline({});
+</script>
+</body>
+</html>
